@@ -152,7 +152,7 @@ class Cube{
   var rgba = this.color;
 
   // Set texture mode to use the texture (0 means “use the sampler”)
-  gl.uniform1i(u_whichTexture, 0);
+  gl.uniform1i(u_whichTexture, this.textureNum);
   gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
   gl.uniformMatrix4fv(u_ModelMatrix, false, this.matrix.elements);
 
@@ -237,35 +237,32 @@ class Cube{
   gl.drawArrays(gl.TRIANGLES, 0, 36);
 }
   renderfaster() {
-    // var xy = this.position;  // (if needed)
     var rgba = this.color;
 
-    // Pass the texture number
-    gl.uniform1i(u_whichTexture, this.textureNum); 
-
-    // Pass the color to the u_FragColor uniform
+    // Pass data to shaders
+    gl.uniform1i(u_whichTexture, this.textureNum);
     gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
-
-    // Pass the model matrix
     gl.uniformMatrix4fv(u_ModelMatrix, false, this.matrix.elements);
 
-    // If the global vertex buffer hasn’t been created yet, initialize it
-    //if (g_vertexBuffer == null) {
-    //initTriangle3D();
-    //}
-
+    // Ensure buffer exists
     if (!g_vertexBuffer) {
       initTriangle3D();
     }
 
-    // Assign the buffer object to a_Position (if not already done by initTriangle3D)
-    // gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
-
-    // Write the cube vertex data into the buffer object
-    //gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.cubeVerts), gl.DYNAMIC_DRAW);
+    // Bind the buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, g_vertexBuffer);
+    
+    // Write data to buffer
     gl.bufferData(gl.ARRAY_BUFFER, this.cubeVerts32, gl.DYNAMIC_DRAW);
-
-    // Draw the cube (36 vertices total for 12 triangles)
+    
+    // Set up attributes - for position-only data
+    gl.vertexAttribPointer(a_Position, 3, gl.FLOAT, false, 0, 0);
+    gl.disableVertexAttribArray(a_UV); // Disable UV if not using it
+    
+    // Draw
     gl.drawArrays(gl.TRIANGLES, 0, 36);
-}
-}
+    
+    // Re-enable UV for other rendering methods
+    gl.enableVertexAttribArray(a_UV);
+  }
+  }
