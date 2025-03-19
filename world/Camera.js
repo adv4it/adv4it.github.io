@@ -5,7 +5,6 @@ class Vector {
     this.z = z || 0;
   }
 
-  // Add two vectors and return a new vector
   add(v) {
     return new Vector(
       this.x + v.x,
@@ -14,7 +13,6 @@ class Vector {
     );
   }
 
-  // Subtract vector v from this vector and return a new vector
   subtract(v) {
     return new Vector(
       this.x - v.x,
@@ -23,7 +21,6 @@ class Vector {
     );
   }
 
-  // Calculate the cross product with another vector and return a new vector
   cross(v) {
     return new Vector(
       this.y * v.z - this.z * v.y,
@@ -32,7 +29,6 @@ class Vector {
     );
   }
 
-  // Calculate the length (magnitude) of this vector
   length() {
     return Math.sqrt(
       this.x * this.x +
@@ -41,7 +37,6 @@ class Vector {
     );
   }
 
-  // Divide this vector by a scalar and return a new vector
   divide(scalar) {
     if (scalar === 0) {
       console.error("Division by zero!");
@@ -52,11 +47,8 @@ class Vector {
       this.y / scalar,
       this.z / scalar
     );
-
-
   }
 
-  // Normalize this vector (set its length to 1) and return a new vector
   normalize() {
     const len = this.length();
     if (len === 0) {
@@ -64,123 +56,227 @@ class Vector {
     }
     return this.divide(len);
   }
+  
   multiply(scalar) {
-  return new Vector(
-    this.x * scalar,
-    this.y * scalar,
-    this.z * scalar
-  );
-}
+    return new Vector(
+      this.x * scalar,
+      this.y * scalar,
+      this.z * scalar
+    );
+  }
 }
 
 class Camera {
   constructor() {
-    //this.type='cube';
-    //this.position = [0.0, 0.0, 0.0];
-    //this.color = [1.0,1.0,1.0,1.0];
-    this.eye = new Vector(0, 0, 3);
-    this.at = new Vector(0, 0, -100);
+    // start point
+    this.eye = new Vector(-25, 2, -22.6); // starting position
+    this.at = new Vector(-1.2, 0, -1.2);  // maze starting positon
     this.up = new Vector(0, 1, 0);
+    this.moveSpeed = 0.2;
+    this.collisionRadius = 0.4;
   }
 
-  forward() {
-    var f = this.at.subtract(this.eye);
-    f = f.divide(f.length());
-    this.at = this.at.add(f);
-    this.eye = this.eye.add(f);
+  // Check for collisions with maze walls
+  checkCollision(newPosition) {
+    // Convert world coordinates to map grid coordinates
+    const mapX = Math.floor((newPosition.x + 25) / 2.38);
+    const mapZ = Math.floor((newPosition.z + 25) / 2.38);
+    
+    // Check if out of bounds
+    if (mapX < 0 || mapX >= 21 || mapZ < 0 || mapZ >= 21) {
+      return true; // Collision with boundary
+    }
+    
+    // Check if the position corresponds to a wall (1) in the map
+    return g_map[mapX][mapZ] === 1;
   }
 
-  back() {
-    var f = this.eye.subtract(this.at);
-    f = f.divide(f.length());
-    this.at = this.at.add(f);
-    this.eye = this.eye.add(f);
+  // secondary collision check
+  advancedCollisionCheck(newPosition) {
+    // Check collision at the camera position
+    if (this.checkCollision(newPosition)) {
+      return true;
+    }
+    
+    // Check collision points around the camera (creating a collision volume)
+    const checkPoints = [
+      new Vector(newPosition.x + this.collisionRadius, newPosition.y, newPosition.z),
+      new Vector(newPosition.x - this.collisionRadius, newPosition.y, newPosition.z),
+      new Vector(newPosition.x, newPosition.y, newPosition.z + this.collisionRadius),
+      new Vector(newPosition.x, newPosition.y, newPosition.z - this.collisionRadius)
+    ];
+    
+    // If any check point collides, return true
+    for (const point of checkPoints) {
+      if (this.checkCollision(point)) {
+        return true;
+      }
+    }
+    
+    return false; // No collision detected
   }
 
-  left() {
-    var f = this.eye.subtract(this.at);
-    f = f.divide(f.length());
-    var s = f.cross(this.up);
-    s = s.divide(s.length());
-    this.at = this.at.add(s);
-    this.eye = this.eye.add(s);
+  // Move forward with collision detection
+  forward(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    const direction = this.at.subtract(this.eye).normalize();
+    
+    const newPosition = this.eye.add(direction.multiply(moveAmount));
+    
+    if (!this.advancedCollisionCheck(newPosition)) {
+      const movement = direction.multiply(moveAmount);
+      this.eye = this.eye.add(movement);
+      this.at = this.at.add(movement);
+    }
   }
 
-  right() {
-    var f = this.eye.subtract(this.at);
-    f = f.divide(f.length());
-    var s = this.up.cross(f);
-    s = s.divide(s.length());
-    this.at = this.at.add(s);
-    this.eye = this.eye.add(s);
+  // Move backward with collision detection
+  back(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    const direction = this.eye.subtract(this.at).normalize();
+    
+    const newPosition = this.eye.add(direction.multiply(moveAmount));
+    
+    if (!this.advancedCollisionCheck(newPosition)) {
+      const movement = direction.multiply(moveAmount);
+      this.eye = this.eye.add(movement);
+      this.at = this.at.add(movement);
+    }
   }
 
-  up() {
-    var f = this.eye.subtract(this.at);
-    f = f.divide(f.length());
-    var s = f.cross(this.up);
-    s = s.divide(s.length());
-    var u = s.cross(f);
-    u = u.divide(u.length());
-    this.at = this.at.add(u);
-    this.eye = this.eye.add(u);
+  // Move left with collision detection
+  left(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    const forward = this.at.subtract(this.eye).normalize();
+    
+    const side = this.up.cross(forward).normalize();
+    
+    const newPosition = this.eye.add(side.multiply(moveAmount));
+    
+    if (!this.advancedCollisionCheck(newPosition)) {
+      const movement = side.multiply(moveAmount);
+      this.eye = this.eye.add(movement);
+      this.at = this.at.add(movement);
+    }
   }
 
-  down() {
-    var f = this.eye.subtract(this.at);
-    f = f.divide(f.length());
-    var s = f.cross(this.up);
-    s = s.divide(s.length());
-    var u = f.cross(s);
-    u = u.divide(u.length());
-    this.at = this.at.subtract(u);
-    this.eye = this.eye.subtract(u);
+  // Move right with collision detection
+  right(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    // calc direction from eye to at
+    const forward = this.at.subtract(this.eye).normalize();
+    
+    // calc side vector
+    const side = forward.cross(this.up).normalize();
+    
+    // Calc new position
+    const newPosition = this.eye.add(side.multiply(moveAmount));
+    
+    if (!this.advancedCollisionCheck(newPosition)) {
+      const movement = side.multiply(moveAmount);
+      this.eye = this.eye.add(movement);
+      this.at = this.at.add(movement);
+    }
   }
 
-  // Function to convert camera to lookAt matrix
-  getLookAtMatrix() {
-    // This could be used to get a matrix for gl.uniformMatrix4fv
-    // Implementation would depend on your matrix library
-    // Example pseudocode:
-    // return createLookAtMatrix(this.eye, this.at, this.up);
-  }
+  // Move up with collision detection
+up(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    const upVector = new Vector(0, 1, 0);
+    
+    // Calc new position
+    const newPosition = this.eye.add(upVector.multiply(moveAmount));
+
+    if (!this.checkCollision(newPosition)) {
+        // Apply movement
+        const movement = upVector.multiply(moveAmount);
+        this.eye = this.eye.add(movement);
+        this.at = this.at.add(movement);
+    }
+}
+
+  // Move down with collision detection
+down(distance = 1) {
+    const moveAmount = distance * this.moveSpeed;
+    
+    const downVector = new Vector(0, -1, 0);
+    
+    // calc new position
+    const newPosition = this.eye.add(downVector.multiply(moveAmount));
+    
+    // ground collision check - prevent going below ground level
+    if (newPosition.y < -0.5) {
+        return;
+    }
+    
+    if (!this.checkCollision(newPosition)) {
+        // Apply movement
+        const movement = downVector.multiply(moveAmount);
+        this.eye = this.eye.add(movement);
+        this.at = this.at.add(movement);
+    }
+}
 
   // Pan camera left/right
   pan(angle) {
-  // Convert angle to radians
-  const radians = angle * (Math.PI / 180);
-  
-  // Get the vector from eye to at
-  const viewVector = this.at.subtract(this.eye);
-  
-  // Calculate the direction vector
-  const direction = viewVector.normalize();
-  
-  // Calculate the right vector (perpendicular to up and direction)
-  const right = direction.cross(this.up).normalize();
-  
-  // Calculate the rotated view vector
-  // We rotate around the up vector
-  const cosAngle = Math.cos(radians);
-  const sinAngle = Math.sin(radians);
-  
-  // Apply rotation formula (around up axis)
-  const rotatedX = direction.x * cosAngle + right.x * sinAngle;
-  const rotatedY = direction.y * cosAngle + right.y * sinAngle;
-  const rotatedZ = direction.z * cosAngle + right.z * sinAngle;
-  
-  const rotatedDirection = new Vector(rotatedX, rotatedY, rotatedZ);
-  
-  // Scale back to original length
-  const scaledDirection = rotatedDirection.multiply(viewVector.length());
-  
-  // Update at point based on the new direction
-  this.at = this.eye.add(scaledDirection);
-}
+    // Convert angle to radians
+    const radians = angle * (Math.PI / 180);
+    
+    // Get the vector from eye to at
+    const viewVector = this.at.subtract(this.eye);
+    
+    // calculate the direction vector
+    const direction = viewVector.normalize();
+    
+    const right = direction.cross(this.up).normalize();
+    
+    const cosAngle = Math.cos(radians);
+    const sinAngle = Math.sin(radians);
+    
+    const rotatedX = direction.x * cosAngle + right.x * sinAngle;
+    const rotatedY = direction.y * cosAngle + right.y * sinAngle;
+    const rotatedZ = direction.z * cosAngle + right.z * sinAngle;
+    
+    const rotatedDirection = new Vector(rotatedX, rotatedY, rotatedZ);
+    
+    const scaledDirection = rotatedDirection.multiply(viewVector.length());
+    
+    this.at = this.eye.add(scaledDirection);
+  }
 
-  // Tilt camera up/down
+  // tilt camera up/down
   tilt(angle) {
-    // Rotate camera around side vector
-    // Implementation would need to calculate side vector and rotate
+    // Convert angle to radians
+    const radians = angle * (Math.PI / 180);
+    
+    // Get the vector from eye to at
+    const viewVector = this.at.subtract(this.eye);
+    
+    const direction = viewVector.normalize();
+    
+    const right = direction.cross(this.up).normalize();
+    
+    const cosAngle = Math.cos(radians);
+    const sinAngle = Math.sin(radians);
+    
+    const upComponent = this.up.normalize();
+    
+    const rotatedX = direction.x * cosAngle + upComponent.x * sinAngle;
+    const rotatedY = direction.y * cosAngle + upComponent.y * sinAngle;
+    const rotatedZ = direction.z * cosAngle + upComponent.z * sinAngle;
+    
+    const rotatedDirection = new Vector(rotatedX, rotatedY, rotatedZ);
+    
+    const scaledDirection = rotatedDirection.multiply(viewVector.length());
+    
+    this.at = this.eye.add(scaledDirection);
+    
+
+    this.up = right.cross(rotatedDirection).normalize();
   }
 }
